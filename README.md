@@ -26,9 +26,10 @@ starting point for parsing free slots.
 Shooters Hill releases each day's courts at 20:00 eight days ahead, so Friday
 courts open at 20:00 on the Thursday of the week before. `clubspark release`:
 
-1. signs in a few minutes early and loads the target Friday's page,
-2. from 20:00:00 refreshes every ~2s and books the first free 20:00 court
-   (moving on to the next court if someone else gets one first),
+1. signs in at 19:55 and loads the target Friday's page,
+2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books the
+   first free 20:00 court (moving on to the next court if someone else gets one
+   first). Faster refreshing trips Cloudflare's "Verify you are human" check.
 3. gives up after 10 minutes and shows a macOS notification with the result.
 
 Set it up on the Mac that stays on (run these from this folder):
@@ -53,7 +54,9 @@ scripts/install-macos.sh            # or --dry-run to rehearse a week first
 Notes:
 - Keep this folder **outside** Documents, Desktop and Downloads: macOS blocks
   scheduled jobs from reading those folders unless you grant Full Disk Access.
-- The Mac must be awake and you must be logged in at 19:55 on Thursday.
+- The Mac must be awake and you must be logged in at 19:55 on Thursday. The job opens
+  a visible Chromium window; if Cloudflare shows "Verify you are human", tick it
+  (the tool never does) and it carries on.
 - If sign-in or booking fails, a screenshot and a description of the page (visible
   boxes and buttons only, never what was typed) are saved in `output/*/debug/`.
 - Log: `output/logs/release.log`; screenshots: `output/booking-<date>/`.

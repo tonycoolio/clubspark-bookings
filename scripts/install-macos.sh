@@ -36,6 +36,7 @@ cat > "$PLIST" <<PLIST
   <array>
     <string>$REPO/.venv/bin/clubspark</string>
     <string>release</string>
+    <string>--headed</string>
     $CONFIRM
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
@@ -55,7 +56,8 @@ PLIST
 if [ "$(uname)" = "Darwin" ]; then
   launchctl bootout "$DOMAIN" "$PLIST" 2>/dev/null || true
   launchctl bootstrap "$DOMAIN" "$PLIST"
-  echo "Scheduled: every Thursday 19:55 ($([ -n "$CONFIRM" ] && echo 'books for real' || echo 'dry run'))."
+  echo "Scheduled: every Thursday 19:55 (checks from 19:58, visible browser)"
+  echo "Mode: $([ -n "$CONFIRM" ] && echo 'books for real' || echo 'dry run')."
   echo "Log: $REPO/output/logs/release.log"
   echo "Test now: launchctl kickstart $DOMAIN/$LABEL"
 else

@@ -101,12 +101,31 @@ def dismiss_cookie_banner(page: Page) -> None:
         pass
 
 
-def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log) -> None:
-    from .booker import check_blocked
+def open_booking_page(page: Page, cfg: Config, debug_dir: Path, headless: bool) -> None:
+    """Open today's booking page and wait for the site header. Cloudflare's "Verify you
+    are human" page is never clicked by us: in a visible browser we wait for the person
+    to click it, otherwise we stop with a clear error."""
+    from .booker import check_blocked, on_cloudflare_check, wait_out_cloudflare
 
-    resp = page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="networkidle")
+    resp = page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="domcontentloaded")
     check_blocked(page, resp.status if resp else None)
+    try:
+        page.wait_for_selector(f"{S.HEADER}, {S.CLOUDFLARE_CHECK}", timeout=30_000)
+    except PlaywrightError:
+        pass
+    if on_cloudflare_check(page) and not wait_out_cloudflare(page, debug_dir.parent, headless,
+                                                             ready=S.HEADER):
+        raise RuntimeError("Cloudflare's 'Verify you are human' check is blocking ClubSpark. "
+                           "Run with --headed and click it, or wait a while and try again.")
+    try:
+        page.wait_for_selector(S.HEADER, timeout=15_000)
+    except PlaywrightError:
+        pass
     dismiss_cookie_banner(page)
+
+
+def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log, headless: bool = True) -> None:
+    open_booking_page(page, cfg, debug_dir, headless)
     if is_signed_in(page):
         log("Already signed in (saved session).")
         return
@@ -125,7 +144,7 @@ def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log) -> None:
         step = "waiting to be sent back to ClubSpark after logging in"
         page.wait_for_url(S.LOGIN_RETURN_URL, timeout=45_000)
         step = "checking the sign-in worked"
-        page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="networkidle")
+        open_booking_page(page, cfg, debug_dir, headless)
         if not is_signed_in(page):
             raise RuntimeError("no signed-in marker found after submitting the form")
     except (PlaywrightError, RuntimeError) as exc:

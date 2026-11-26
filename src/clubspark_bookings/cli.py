@@ -80,7 +80,13 @@ def main(argv: list[str] | None = None) -> int:
     rel.add_argument("--days-ahead", type=int, default=8,
                      help="days between release and the court date (default 8: Thu -> Fri week)")
     rel.add_argument("--time", default="20:00", help="court start time, HH:MM (default 20:00)")
-    rel.add_argument("--poll", type=float, default=2.0, help="seconds between refreshes (min 1)")
+    rel.add_argument("--start-early", type=float, default=2.0,
+                     help="minutes before the release to start checking (default 2: 19:58)")
+    rel.add_argument("--poll", type=float, default=5.0,
+                     help="seconds between refreshes after the release (default 5, min 3; faster "
+                          "trips Cloudflare's bot check)")
+    rel.add_argument("--early-poll", type=float, default=15.0,
+                     help="seconds between refreshes before the release (default 15)")
     rel.add_argument("--window", type=int, default=10, help="minutes to keep trying after release")
     rel.add_argument("--now", action="store_true",
                      help="don't wait for the release time (for testing a dry run)")
@@ -117,19 +123,24 @@ def main(argv: list[str] | None = None) -> int:
             now = datetime.now()
             day, release = release_plan(now, time.fromisoformat(args.opens_at), args.days_ahead)
             until = release + timedelta(minutes=args.window)
+            start = release - timedelta(minutes=args.start_early)
             if args.now:
-                release, until = now, now + timedelta(minutes=args.window)
+                start = release = now
+                until = now + timedelta(minutes=args.window)
             elif now > until:
                 print(f"Too late: today's release at {args.opens_at} has passed.", file=sys.stderr)
                 return 1
             label = f"{day:%a %d %b} {args.time}"
-            print(f"Target: {label}, released {release:%a %d %b %H:%M:%S}."
+            print(f"Target: {label}, released {release:%a %d %b %H:%M:%S}; "
+                  f"checking from {start:%H:%M:%S}."
                   f"{'' if args.confirm else ' (dry run)'}")
             try:
-                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(1.0, args.poll),
+                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(3.0, args.poll),
                                     until=until, confirm=args.confirm, headless=not args.headed,
                                     out=args.out / f"booking-{day.isoformat()}",
-                                    state=args.out / "auth.json", start_at=release)
+                                    state=args.out / "auth.json", start_at=start,
+                                    release_at=release,
+                                    early_interval=max(3.0, args.early_poll))
             except Exception as exc:
                 notify("Court booking failed", f"{label}: {exc}"[:200])
                 raise

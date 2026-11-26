@@ -1,18 +1,18 @@
 """Every CSS selector and URL path that depends on ClubSpark's page layout.
 
-UNVERIFIED: these are based on ClubSpark's usual booking markup and have not yet
-been checked against the live Shooters Hill pages (ClubSpark blocks cloud IPs).
+Sign-in, the booking grid and free/taken slots are confirmed on the live site.
+STILL UNVERIFIED: the booking pop-up's continue button and the confirm button.
 Run `clubspark book --headed` (dry run) once and fix anything that doesn't match.
 """
 
 # Slots on the Book-by-date grid carry
 #   data-test-id="booking-<courtId>|<YYYY-MM-DD>|<minutes>"   (minutes after midnight; 20:00 -> 1200)
-# CONFIRMED (26 Nov 2026): taken slots are <a class="edit-booking" ...>, text like "20:00 - 21:00 Booked".
-# NOT YET SEEN: free slots. Assumed to be any slot that isn't marked as taken.
+# CONFIRMED (26 Nov 2026, signed in as a member):
+#   taken: <a class="edit-booking" ...>  text like "20:00 - 21:00 Booked"
+#   free:  <a class="book-interval not-booked" ...>  text "FREE"  (one per 30-minute start)
 SLOT_ATTR = "data-test-id"
 ANY_SLOT = "[data-test-id^='booking-']"
-FREE_SLOT = ("a.book-interval.not-booked[data-test-id^='booking-'], "
-             "[data-test-id^='booking-']:not(.edit-booking):not(.booked)")
+FREE_SLOT = "a.book-interval.not-booked[data-test-id^='booking-']"
 
 # Grid has finished rendering (any slot, booked or not).
 GRID_READY = ANY_SLOT
@@ -43,6 +43,11 @@ LOGIN_RETURN_URL = "**/clubspark.lta.org.uk/**"
 HEADER = ".ui-header-v2-title-anchor"
 SIGN_IN_LINK = "a[href*='/Account/SignIn']"
 SIGNED_IN_MARKER = "a:has-text('Sign out'), a:has-text('Log out'), a[href*='SignOut']"
+
+# Cloudflare "Performing security verification / Verify you are human" page, shown
+# instead of the site after many requests in a short time (seen 26 Nov 2026).
+CLOUDFLARE_CHECK = ("iframe[src*='challenges.cloudflare.com'], #challenge-form, "
+                    ":text('Performing security verification'), :text('Verify you are human')")
 
 # Cookie banner (Osano) that can cover the page.
 COOKIE_REJECT = "button.osano-cm-denyAll"
