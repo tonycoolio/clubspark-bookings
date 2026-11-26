@@ -3,6 +3,27 @@
 Python + Playwright tools for court bookings at
 [Shooters Hill LTC on ClubSpark](https://clubspark.lta.org.uk/ShootersHillLTC/Booking/BookByDate).
 
+## Tonight's plan: first release, Thu 26 Nov 2026 (courts for Fri 4 Dec)
+
+| When (Thu 26 Nov) | What |
+| --- | --- |
+| 13:00 | Unattended dry-run rehearsal (Claude scheduled task `clubspark-rehearsal`). Checks the booking pop-up's continue and confirm buttons, fixes their selectors if needed and pushes; never books. A Mac notification gives the result. |
+| 19:53 / 19:58 | Calendar reminder: be ready to book by hand. |
+| 19:55 | launchd job `local.clubspark-bookings.release` signs in (visible Chromium window). |
+| 19:58 | Starts checking Fri 4 Dec every ~15s, then every ~5s from 20:00; books the first free 20:00 court for real. |
+| 20:10 | Gives up if nothing was booked; Mac notification with the result. |
+
+Status and risks:
+- Confirmed on the live site: automatic sign-in, the booking grid, and free (`FREE`) vs taken slots.
+- Not yet confirmed: the pop-up's continue button and the confirm button (the 13:00 rehearsal checks them).
+- Cloudflare's "Verify you are human" check blocked the automated browser early on 26 Nov,
+  after many quick page loads while testing. If it appears tonight, tick it in the
+  Chromium window (the tool never does). If it won't clear, **book by hand at 20:00**:
+  [Fri 4 Dec grid](https://clubspark.lta.org.uk/ShootersHillLTC/Booking/BookByDate#?date=2026-12-04&role=member).
+- If you get a "Court booked" notification or a confirmation email, there's no need to book by hand.
+- Mac must stay on, awake and logged in, with the Claude app open for the 13:00 rehearsal.
+- Afterwards: check `output/logs/release.log` and `output/booking-2026-12-04/`.
+
 ## Setup
 
 ```bash
