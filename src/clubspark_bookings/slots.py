@@ -47,3 +47,9 @@ def next_weekday(weekday: int, after: datetime, at: time) -> date:
     if days == 0 and after.time() >= at:
         candidate += timedelta(days=7)
     return candidate
+
+
+def release_plan(now: datetime, opens_at: time, days_ahead: int) -> tuple[date, datetime]:
+    """For a run started on release day: (date being released, release moment)."""
+    release = datetime.combine(now.date(), opens_at)
+    return now.date() + timedelta(days=days_ahead), release

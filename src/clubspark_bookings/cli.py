@@ -7,10 +7,10 @@ import sys
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
-from .booker import BlockedError, watch_and_book
+from .booker import BlockedError, notify, watch_and_book
 from .browser import capture_availability
 from .config import Config, booking_url
-from .slots import next_weekday, to_minutes
+from .slots import next_weekday, release_plan, to_minutes
 
 WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
@@ -50,6 +50,19 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--headed", action="store_true", help="show the browser window")
     bk.add_argument("--out", type=Path, default=Path("output"))
 
+    rel = sub.add_parser("release", help="Book the moment a new day's courts are released")
+    rel.add_argument("--opens-at", default="20:00", help="release time, HH:MM (default 20:00)")
+    rel.add_argument("--days-ahead", type=int, default=8,
+                     help="days between release and the court date (default 8: Thu -> Fri week)")
+    rel.add_argument("--time", default="20:00", help="court start time, HH:MM (default 20:00)")
+    rel.add_argument("--poll", type=float, default=2.0, help="seconds between refreshes (min 1)")
+    rel.add_argument("--window", type=int, default=10, help="minutes to keep trying after release")
+    rel.add_argument("--now", action="store_true",
+                     help="don't wait for the release time (for testing a dry run)")
+    rel.add_argument("--confirm", action="store_true", help="actually complete the booking")
+    rel.add_argument("--headed", action="store_true")
+    rel.add_argument("--out", type=Path, default=Path("output"))
+
     args = parser.parse_args(argv)
     load_dotenv()
     cfg = Config.from_env()
@@ -68,7 +81,35 @@ def main(argv: list[str] | None = None) -> int:
                   f"{'' if args.confirm else ' (dry run)'}")
             ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
                                 until=until, confirm=args.confirm, headless=not args.headed,
-                                out=args.out / f"booking-{day.isoformat()}")
+                                out=args.out / f"booking-{day.isoformat()}",
+                                state=args.out / "auth.json")
+            return 0 if ok else 1
+        elif args.command == "release":
+            now = datetime.now()
+            day, release = release_plan(now, time.fromisoformat(args.opens_at), args.days_ahead)
+            until = release + timedelta(minutes=args.window)
+            if args.now:
+                release, until = now, now + timedelta(minutes=args.window)
+            elif now > until:
+                print(f"Too late: today's release at {args.opens_at} has passed.", file=sys.stderr)
+                return 1
+            label = f"{day:%a %d %b} {args.time}"
+            print(f"Target: {label}, released {release:%a %d %b %H:%M:%S}."
+                  f"{'' if args.confirm else ' (dry run)'}")
+            try:
+                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(1.0, args.poll),
+                                    until=until, confirm=args.confirm, headless=not args.headed,
+                                    out=args.out / f"booking-{day.isoformat()}",
+                                    state=args.out / "auth.json", start_at=release)
+            except Exception as exc:
+                notify("Court booking failed", f"{label}: {exc}"[:200])
+                raise
+            if ok:
+                notify("Court booked", f"{label} at Shooters Hill. Check your email.")
+            elif args.confirm:
+                notify("No court booked", f"{label}: none free within {args.window} min.")
+            else:
+                notify("Dry run finished", f"{label}: see output/booking-{day.isoformat()}")
             return 0 if ok else 1
     except BlockedError as exc:
         print(exc, file=sys.stderr)

@@ -27,3 +27,11 @@ def test_next_friday():
     assert next_weekday(fri, thu, time(20)) == date(2026, 11, 27)
     assert next_weekday(fri, datetime(2026, 11, 27, 19, 0), time(20)) == date(2026, 11, 27)
     assert next_weekday(fri, datetime(2026, 11, 27, 20, 30), time(20)) == date(2026, 12, 4)
+
+
+def test_release_plan_thursday_releases_friday_week():
+    from clubspark_bookings.slots import release_plan
+
+    target, release = release_plan(datetime(2026, 11, 26, 19, 55), time(20), 8)
+    assert target == date(2026, 12, 4) and target.weekday() == 4
+    assert release == datetime(2026, 11, 26, 20, 0)
