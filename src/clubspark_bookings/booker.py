@@ -15,6 +15,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from . import selectors as S
 from .config import BASE_URL, Config, booking_url
+from .signin import ensure_signed_in, save_debug
 from .slots import Slot, matching
 
 
@@ -22,7 +23,7 @@ class BlockedError(RuntimeError):
     """ClubSpark's Cloudflare firewall refused the request (common from cloud IPs)."""
 
 
-def _check_blocked(page: Page, status: int | None) -> None:
+def check_blocked(page: Page, status: int | None) -> None:
     if status == 403 and "have been blocked" in page.content():
         raise BlockedError(
             "ClubSpark (Cloudflare) blocked this request. This happens from cloud/data-centre "
@@ -34,36 +35,14 @@ def log(msg: str) -> None:
     print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
 
 
-def ensure_signed_in(page: Page, cfg: Config) -> None:
-    resp = page.goto(BASE_URL + S.SIGN_IN_PATH.format(venue=cfg.venue), wait_until="networkidle")
-    _check_blocked(page, resp.status if resp else None)
-    if page.locator(S.SIGNED_IN_MARKER).count():
-        log("Already signed in (saved session).")
-        return
-    if not cfg.has_credentials:
-        raise RuntimeError("Set CLUBSPARK_USERNAME and CLUBSPARK_PASSWORD (e.g. in .env).")
-    lta = page.locator(S.LTA_SIGN_IN_BUTTON).first
-    if lta.count():
-        lta.click()
-        page.wait_for_load_state("networkidle")
-    page.locator(S.USERNAME_INPUT).first.fill(cfg.username)
-    page.locator(S.PASSWORD_INPUT).first.fill(cfg.password)
-    page.locator(S.SUBMIT_LOGIN).first.click()
-    page.wait_for_load_state("networkidle")
-    page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="networkidle")
-    if not page.locator(S.SIGNED_IN_MARKER).count():
-        raise RuntimeError("Sign-in did not succeed; run with --headed to see what happened.")
-    log("Signed in.")
-
-
 def find_free(page: Page, cfg: Config, day: date, start_minutes: int) -> list[Slot]:
     """Load (first time) or refresh the day's grid and return free slots at the target time."""
     target = booking_url(cfg.venue, day, role="member")
     if page.url != target:
         resp = page.goto(target, wait_until="domcontentloaded")
-        _check_blocked(page, resp.status if resp else None)
+        check_blocked(page, resp.status if resp else None)
     resp = page.reload(wait_until="domcontentloaded")  # hash-only URL changes don't refetch
-    _check_blocked(page, resp.status if resp else None)
+    check_blocked(page, resp.status if resp else None)
     try:
         page.wait_for_selector(S.GRID_READY, timeout=15_000)
     except PlaywrightTimeout:
@@ -122,7 +101,7 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
                 viewport={"width": 1400, "height": 1000},
             )
             page = ctx.new_page()
-            ensure_signed_in(page, cfg)
+            ensure_signed_in(page, cfg, out / "debug", log)
             ctx.storage_state(path=str(state))
             if start_at:
                 find_free(page, cfg, day, start_minutes)  # warm up: page loaded before release
@@ -131,13 +110,15 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
             while datetime.now() < until:
                 attempts += 1
                 slots = find_free(page, cfg, day, start_minutes)
+                if attempts == 1:
+                    save_debug(page, out / "debug", "booking-page")
                 for slot in slots:
                     log(f"Court {slot.court_id} free at {hhmm} on {day}. Booking...")
                     try:
                         return book(page, slot, out, confirm)
                     except PlaywrightError as exc:  # someone beat us to it; try the next court
                         log(f"Could not book court {slot.court_id}: {exc.message.splitlines()[0]}")
-                        page.screenshot(path=str(out / f"failed-{attempts}.png"), full_page=True)
+                        save_debug(page, out / "debug", f"booking-failed-{attempts}")
                         find_free(page, cfg, day, start_minutes)
                 if attempts == 1 or attempts % 30 == 0:
                     log(f"No court free at {hhmm} on {day} (check {attempts}).")

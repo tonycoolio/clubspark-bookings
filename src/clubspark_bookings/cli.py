@@ -26,6 +26,31 @@ def load_dotenv(path: Path = Path(".env")) -> None:
             os.environ.setdefault(key.strip(), value.strip())
 
 
+def login_by_hand(cfg: Config, out: Path) -> int:
+    from playwright.sync_api import sync_playwright
+
+    from .booker import log
+    from .signin import interactive_login, is_signed_in
+
+    state = out / "auth.json"
+    out.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        ctx = browser.new_context(viewport={"width": 1300, "height": 900})
+        page = ctx.new_page()
+        interactive_login(page, cfg, out / "debug", log)
+        if page.is_closed():
+            print("The browser was closed before sign-in finished; nothing saved.", file=sys.stderr)
+            return 1
+        ctx.storage_state(path=str(state))
+        signed_in = is_signed_in(page)
+        browser.close()
+    print(f"Saved your signed-in session to {state}.")
+    print("Signed in: " + ("yes" if signed_in else "couldn't confirm (that's OK; send me the file below)"))
+    print(f"Please send me {out / 'debug' / 'login-pages.txt'} so I can fix automatic sign-in.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clubspark")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -63,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     rel.add_argument("--headed", action="store_true")
     rel.add_argument("--out", type=Path, default=Path("output"))
 
+    sub.add_parser("login", help="Sign in by hand once; the session is saved for later runs")
+
     args = parser.parse_args(argv)
     load_dotenv()
     cfg = Config.from_env()
@@ -84,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
                                 out=args.out / f"booking-{day.isoformat()}",
                                 state=args.out / "auth.json")
             return 0 if ok else 1
+        elif args.command == "login":
+            return login_by_hand(cfg, Path("output"))
         elif args.command == "release":
             now = datetime.now()
             day, release = release_plan(now, time.fromisoformat(args.opens_at), args.days_ahead)

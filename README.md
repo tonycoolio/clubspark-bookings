@@ -40,10 +40,13 @@ python3 -m venv .venv
 .venv/bin/playwright install chromium
 cp .env.example .env        # fill in CLUBSPARK_USERNAME and CLUBSPARK_PASSWORD
 
-# 2. Rehearse on a date that has a free slot (dry run: stops before confirming)
+# 2. Sign in by hand once (saves the session; records the sign-in pages for debugging)
+.venv/bin/clubspark login
+
+# 3. Rehearse on a date that has a free slot (dry run: stops before confirming)
 .venv/bin/clubspark book --date 2026-11-30 --time 18:00 --headed
 
-# 3. Schedule it every Thursday at 19:55
+# 4. Schedule it every Thursday at 19:55
 scripts/install-macos.sh            # or --dry-run to rehearse a week first
 ```
 
@@ -51,6 +54,8 @@ Notes:
 - Keep this folder **outside** Documents, Desktop and Downloads: macOS blocks
   scheduled jobs from reading those folders unless you grant Full Disk Access.
 - The Mac must be awake and you must be logged in at 19:55 on Thursday.
+- If sign-in or booking fails, a screenshot and a description of the page (visible
+  boxes and buttons only, never what was typed) are saved in `output/*/debug/`.
 - Log: `output/logs/release.log`; screenshots: `output/booking-<date>/`.
 - Test the scheduled job right away: `launchctl kickstart gui/$(id -u)/local.clubspark-bookings.release`.
 - Remove it: `scripts/install-macos.sh --uninstall`.
