@@ -5,7 +5,9 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from .browser import capture_availability
+import sys
+
+from .browser import BlockedError, capture_availability
 from .config import Config, booking_url
 
 
@@ -27,7 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "url":
         print(booking_url(cfg.venue, args.date))
     elif args.command == "availability":
-        out = capture_availability(cfg, args.date, args.out, headless=not args.headed)
+        try:
+            out = capture_availability(cfg, args.date, args.out, headless=not args.headed)
+        except BlockedError as exc:
+            print(exc, file=sys.stderr)
+            return 2
         print(f"Saved screenshot and responses to {out}")
     return 0
 

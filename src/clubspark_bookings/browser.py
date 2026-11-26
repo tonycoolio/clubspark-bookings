@@ -10,6 +10,10 @@ from playwright.sync_api import Page, sync_playwright
 from .config import BASE_URL, Config, booking_url
 
 
+class BlockedError(RuntimeError):
+    """ClubSpark's Cloudflare firewall refused the request (common from cloud IPs)."""
+
+
 def capture_availability(cfg: Config, day: date, out_dir: Path, headless: bool = True) -> Path:
     """Open the Book-by-date page as a guest, save a screenshot and any JSON
     the page loads from ClubSpark. Returns the output directory for that day.
@@ -34,9 +38,17 @@ def capture_availability(cfg: Config, day: date, out_dir: Path, headless: bool =
                     pass
 
         page.on("response", on_response)
-        page.goto(booking_url(cfg.venue, day), wait_until="networkidle", timeout=60_000)
+        resp = page.goto(booking_url(cfg.venue, day), wait_until="networkidle", timeout=60_000)
         page.screenshot(path=str(day_dir / "page.png"), full_page=True)
+        blocked = resp is not None and resp.status == 403 and "have been blocked" in page.content()
         browser.close()
+
+    if blocked:
+        raise BlockedError(
+            "ClubSpark (Cloudflare) blocked this request. This happens from cloud/data-centre "
+            "IPs; run the tool from a home connection instead. Screenshot: "
+            f"{day_dir / 'page.png'}"
+        )
 
     (day_dir / "responses.json").write_text(json.dumps(responses, indent=2))
     return day_dir
