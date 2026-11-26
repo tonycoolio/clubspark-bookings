@@ -1,8 +1,10 @@
 """Every CSS selector and URL path that depends on ClubSpark's page layout.
 
 Sign-in, the booking grid and free/taken slots are confirmed on the live site.
-STILL UNVERIFIED: the booking pop-up's continue button and the confirm button.
-Run `clubspark book --headed` (dry run) once and fix anything that doesn't match.
+The booking pop-up's continue button and the confirm button are also CONFIRMED by a
+dry run on 26 Nov 2026 (Court 1, 27 Nov 14:30): it reached "Confirm your booking"
+(court, date, time, 30 mins, total cost) with its "Confirm" button found by
+CONFIRM_BOOKING. No selector changes were needed.
 """
 
 # Slots on the Book-by-date grid carry
