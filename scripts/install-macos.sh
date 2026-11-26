@@ -1,5 +1,5 @@
 #!/bin/bash
-# Schedule the weekly release booking on macOS (launchd).
+# Schedule the release bookings on macOS (launchd): Sun-Thu 19:55 for Mon-Fri courts 8 days ahead.
 #   scripts/install-macos.sh            books for real (--confirm)
 #   scripts/install-macos.sh --dry-run  stops at the confirmation page each week
 #   scripts/install-macos.sh --uninstall
@@ -26,6 +26,12 @@ esac
 [ -f "$REPO/.env" ] || { echo "Create $REPO/.env with your ClubSpark login first." >&2; exit 1; }
 mkdir -p "$REPO/output/logs" "$(dirname "$PLIST")"
 
+CALENDAR=""
+for day in 0 1 2 3 4; do
+  CALENDAR+="    <dict><key>Weekday</key><integer>$day</integer><key>Hour</key><integer>19</integer><key>Minute</key><integer>55</integer></dict>
+"
+done
+
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -40,13 +46,11 @@ cat > "$PLIST" <<PLIST
     $CONFIRM
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
-  <!-- Every Thursday (launchd: Sunday=0) at 19:55, five minutes before release. -->
+  <!-- Sunday-Thursday (launchd: Sunday=0) at 19:55, five minutes before the 20:00
+       release of the courts 8 days ahead: Monday-Friday of the week after next. -->
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Weekday</key><integer>4</integer>
-    <key>Hour</key><integer>19</integer>
-    <key>Minute</key><integer>55</integer>
-  </dict>
+  <array>
+$CALENDAR  </array>
   <key>StandardOutPath</key><string>$REPO/output/logs/release.log</string>
   <key>StandardErrorPath</key><string>$REPO/output/logs/release.log</string>
 </dict>
@@ -56,7 +60,7 @@ PLIST
 if [ "$(uname)" = "Darwin" ]; then
   launchctl bootout "$DOMAIN" "$PLIST" 2>/dev/null || true
   launchctl bootstrap "$DOMAIN" "$PLIST"
-  echo "Scheduled: every Thursday 19:55 (checks from 19:58, visible browser)"
+  echo "Scheduled: Sunday-Thursday 19:55, booking 20:00 Monday-Friday 8 days ahead (checks from 19:58, visible browser)"
   echo "Mode: $([ -n "$CONFIRM" ] && echo 'books for real' || echo 'dry run')."
   echo "Log: $REPO/output/logs/release.log"
   echo "Test now: launchctl kickstart $DOMAIN/$LABEL"

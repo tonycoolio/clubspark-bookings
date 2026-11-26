@@ -3,26 +3,13 @@
 Python + Playwright tools for court bookings at
 [Shooters Hill LTC on ClubSpark](https://clubspark.lta.org.uk/ShootersHillLTC/Booking/BookByDate).
 
-## Tonight's plan: first release, Thu 26 Nov 2026 (courts for Fri 4 Dec)
+## Status (26 Nov 2026)
 
-| When (Thu 26 Nov) | What |
-| --- | --- |
-| 13:00 | Unattended dry-run rehearsal (Claude scheduled task `clubspark-rehearsal`). Checks the booking pop-up's continue and confirm buttons, fixes their selectors if needed and pushes; never books. A Mac notification gives the result. |
-| 19:53 / 19:58 | Calendar reminder: be ready to book by hand. |
-| 19:55 | launchd job `local.clubspark-bookings.release` signs in (visible Chromium window). |
-| 19:58 | Starts checking Fri 4 Dec every ~15s, then every ~5s from 20:00; books the first free 20:00 court for real. |
-| 20:10 | Gives up if nothing was booked; Mac notification with the result. |
-
-Status and risks:
-- Confirmed on the live site: automatic sign-in, the booking grid, and free (`FREE`) vs taken slots.
-- Not yet confirmed: the pop-up's continue button and the confirm button (the 13:00 rehearsal checks them).
-- Cloudflare's "Verify you are human" check blocked the automated browser early on 26 Nov,
-  after many quick page loads while testing. If it appears tonight, tick it in the
-  Chromium window (the tool never does). If it won't clear, **book by hand at 20:00**:
-  [Fri 4 Dec grid](https://clubspark.lta.org.uk/ShootersHillLTC/Booking/BookByDate#?date=2026-12-04&role=member).
-- If you get a "Court booked" notification or a confirmation email, there's no need to book by hand.
-- Mac must stay on, awake and logged in, with the Claude app open for the 13:00 rehearsal.
-- Afterwards: check `output/logs/release.log` and `output/booking-2026-12-04/`.
+- Working end to end: the first release run booked Court 5 for Fri 4 Dec at 20:00:06
+  (30 min, before 60-minute booking was added).
+- Scheduled: Sunday-Thursday at 19:55, booking 20:00-21:00 Monday-Friday 8 days ahead.
+- Watching: Court 5, Fri 4 Dec 20:30-21:00 for a cancellation
+  (`output/logs/watch-court5-2030.log`).
 
 ## Setup
 
@@ -42,12 +29,13 @@ python3 -m venv .venv
 `availability` saves `output/<date>/page.png` and the JSON the page loads, as a
 starting point for parsing free slots.
 
-## Weekly auto-booking (Friday 8pm, released Thursday 8pm)
+## Auto-booking 8pm Monday-Friday (released 8pm, 8 days before)
 
-Shooters Hill releases each day's courts at 20:00 eight days ahead, so Friday
-courts open at 20:00 on the Thursday of the week before. `clubspark release`:
+Shooters Hill releases each day's courts at 20:00 eight days ahead: Monday's courts
+open on the Sunday 8 days before, through to Friday's on the Thursday 8 days before.
+So the job runs Sunday-Thursday, and each run's `clubspark release`:
 
-1. signs in at 19:55 and loads the target Friday's page,
+1. signs in at 19:55 and loads the page for the day 8 days ahead,
 2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books
    20:00-21:00 on the first court free for the hour, or the longest it can get
    (moving on to the next court if someone else gets one first). Faster
@@ -69,20 +57,21 @@ cp .env.example .env        # fill in CLUBSPARK_USERNAME and CLUBSPARK_PASSWORD
 # 3. Rehearse on a date that has a free slot (dry run: stops before confirming)
 .venv/bin/clubspark book --date 2026-11-30 --time 18:00 --headed
 
-# 4. Schedule it every Thursday at 19:55
+# 4. Schedule it Sunday-Thursday at 19:55
 scripts/install-macos.sh            # or --dry-run to rehearse a week first
 ```
 
 Notes:
 - Keep this folder **outside** Documents, Desktop and Downloads: macOS blocks
   scheduled jobs from reading those folders unless you grant Full Disk Access.
-- The Mac must be awake and you must be logged in at 19:55 on Thursday. The job opens
+- The Mac must be awake and you must be logged in at 19:55, Sunday to Thursday. The job opens
   a visible Chromium window; if Cloudflare shows "Verify you are human", tick it
   (the tool never does) and it carries on.
 - If sign-in or booking fails, a screenshot and a description of the page (visible
   boxes and buttons only, never what was typed) are saved in `output/*/debug/`.
 - Log: `output/logs/release.log`; screenshots: `output/booking-<date>/`.
-- Test the scheduled job right away: `launchctl kickstart gui/$(id -u)/local.clubspark-bookings.release`.
+- `launchctl kickstart gui/$(id -u)/local.clubspark-bookings.release` starts a REAL run
+  straight away (on Sunday-Thursday before 20:10 it waits for 20:00 and books).
 - Remove it: `scripts/install-macos.sh --uninstall`.
 
 ## Watch for a cancellation
