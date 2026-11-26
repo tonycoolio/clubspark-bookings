@@ -15,7 +15,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from . import selectors as S
 from .config import BASE_URL, Config, booking_url
-from .signin import ensure_signed_in, save_debug
+from .signin import dismiss_cookie_banner, ensure_signed_in, save_debug
 from .slots import Slot, matching
 
 
@@ -43,6 +43,7 @@ def find_free(page: Page, cfg: Config, day: date, start_minutes: int) -> list[Sl
         check_blocked(page, resp.status if resp else None)
     resp = page.reload(wait_until="domcontentloaded")  # hash-only URL changes don't refetch
     check_blocked(page, resp.status if resp else None)
+    dismiss_cookie_banner(page)
     try:
         page.wait_for_selector(S.GRID_READY, timeout=15_000)
     except PlaywrightTimeout:

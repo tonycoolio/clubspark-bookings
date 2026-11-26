@@ -22,11 +22,13 @@ _DESCRIBE_JS = """
     return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
   const txt = el => (el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\\s+/g, ' ').slice(0, 60);
   const out = [];
-  for (const el of document.querySelectorAll('input, select, textarea, button, a[href], [role=button]')) {
+  for (const el of document.querySelectorAll('input, select, textarea, button, a[href], [role=button], [data-test-id]')) {
     if (!vis(el)) continue;
     const tag = el.tagName.toLowerCase();
     if (tag === 'input' && el.type === 'hidden') continue;
     const bits = [tag];
+    if (!['input','select','textarea','button','a'].includes(tag) && el.getAttribute('role') !== 'button'
+        && !el.getAttribute('data-test-id')) continue;
     for (const a of ['type', 'id', 'name', 'placeholder', 'data-test-id', 'class']) {
       const v = el.getAttribute(a); if (v) bits.push(`${a}=${JSON.stringify(v.slice(0, 80))}`);
     }
@@ -74,6 +76,8 @@ def fill_login_form(page: Page, cfg: Config, timeout: float = 15_000) -> None:
     _visible(page, S.USERNAME_INPUT).fill(cfg.username, timeout=timeout)
     if not _has_visible(page, S.PASSWORD_INPUT):
         _visible(page, S.SUBMIT_LOGIN).click(timeout=timeout)
+    if _has_visible(page, S.REMEMBER_ME) and not page.locator(S.REMEMBER_ME).first.is_checked():
+        page.locator(S.REMEMBER_ME).first.check(timeout=timeout)
     password = _visible(page, S.PASSWORD_INPUT)
     password.fill(cfg.password, timeout=timeout)
     # Prefer the submit button in the password's own form (two-step pages have two).
@@ -83,7 +87,18 @@ def fill_login_form(page: Page, cfg: Config, timeout: float = 15_000) -> None:
 
 
 def is_signed_in(page: Page) -> bool:
-    return _has_visible(page, S.SIGNED_IN_MARKER) or page.locator(S.SIGNED_IN_MARKER).count() > 0
+    """Signed in = a sign-out link exists, or the header is drawn without a Sign in link."""
+    if page.locator(S.SIGNED_IN_MARKER).count():
+        return True
+    return _has_visible(page, S.HEADER) and not _has_visible(page, S.SIGN_IN_LINK)
+
+
+def dismiss_cookie_banner(page: Page) -> None:
+    try:
+        if _has_visible(page, S.COOKIE_REJECT):
+            _visible(page, S.COOKIE_REJECT).click(timeout=3000)
+    except PlaywrightError:
+        pass
 
 
 def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log) -> None:
@@ -91,6 +106,7 @@ def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log) -> None:
 
     resp = page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="networkidle")
     check_blocked(page, resp.status if resp else None)
+    dismiss_cookie_banner(page)
     if is_signed_in(page):
         log("Already signed in (saved session).")
         return
@@ -100,12 +116,14 @@ def ensure_signed_in(page: Page, cfg: Config, debug_dir: Path, log) -> None:
     step = "opening the sign-in page"
     try:
         page.goto(BASE_URL + S.SIGN_IN_PATH.format(venue=cfg.venue), wait_until="networkidle")
-        if not _has_visible(page, S.PASSWORD_INPUT) and _has_visible(page, S.LTA_SIGN_IN_BUTTON):
-            step = "clicking the LTA sign-in button"
+        if _has_visible(page, S.LTA_SIGN_IN_BUTTON):
+            step = "clicking the Login button on ClubSpark's sign-in page"
             _visible(page, S.LTA_SIGN_IN_BUTTON).click()
-            page.wait_for_load_state("networkidle")
-        step = "filling in the username and password"
+            page.wait_for_load_state("domcontentloaded")
+        step = "filling in the LTA username and password"
         fill_login_form(page, cfg)
+        step = "waiting to be sent back to ClubSpark after logging in"
+        page.wait_for_url(S.LOGIN_RETURN_URL, timeout=45_000)
         step = "checking the sign-in worked"
         page.goto(booking_url(cfg.venue, date.today(), role="member"), wait_until="networkidle")
         if not is_signed_in(page):
