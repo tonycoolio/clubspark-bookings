@@ -7,7 +7,8 @@ Python + Playwright tools for court bookings at
 
 - Working end to end: the first release run booked Court 5 for Fri 4 Dec at 20:00:06
   (30 min, before 60-minute booking was added).
-- Scheduled: Sunday-Thursday at 19:55, booking 20:00-21:00 Monday-Friday 8 days ahead.
+- Scheduled: Sunday-Thursday at 19:55, booking 20:00-21:00 Monday-Friday 8 days ahead;
+  Saturday at 19:55, booking 16:30-17:30 Sunday 8 days ahead.
 - Watching: Court 5, Fri 4 Dec 20:30-21:00 for a cancellation
   (`output/logs/watch-court5-2030.log`).
 
@@ -29,17 +30,19 @@ python3 -m venv .venv
 `availability` saves `output/<date>/page.png` and the JSON the page loads, as a
 starting point for parsing free slots.
 
-## Auto-booking 8pm Monday-Friday (released 8pm, 8 days before)
+## Auto-booking 8pm Monday-Friday and 4.30pm Sunday (released 8pm, 8 days before)
 
 Shooters Hill releases each day's courts at 20:00 eight days ahead: Monday's courts
 open on the Sunday 8 days before, through to Friday's on the Thursday 8 days before.
-So the job runs Sunday-Thursday, and each run's `clubspark release`:
+So `local.clubspark-bookings.release` runs Sunday-Thursday (20:00 courts), and
+`local.clubspark-bookings.release-sunday` runs Saturday (`--time 16:30`, Sunday's
+16:30 courts). Each run's `clubspark release`:
 
 1. signs in at 19:55 and loads the page for the day 8 days ahead,
 2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books
-   20:00-21:00 on the first court free for the hour, or the longest it can get
-   (moving on to the next court if someone else gets one first). Faster
-   refreshing trips Cloudflare's "Verify you are human" check.
+   the hour (20:00-21:00, or 16:30-17:30 on Sundays) on the first court free for
+   it, or the longest it can get (moving on to the next court if someone else gets
+   one first). Faster refreshing trips Cloudflare's "Verify you are human" check.
 3. gives up after 10 minutes and shows a macOS notification with the result.
 
 Set it up on the Mac that stays on (run these from this folder):
@@ -57,14 +60,14 @@ cp .env.example .env        # fill in CLUBSPARK_USERNAME and CLUBSPARK_PASSWORD
 # 3. Rehearse on a date that has a free slot (dry run: stops before confirming)
 .venv/bin/clubspark book --date 2026-11-30 --time 18:00 --headed
 
-# 4. Schedule it Sunday-Thursday at 19:55
+# 4. Schedule both jobs (Sunday-Thursday and Saturday at 19:55)
 scripts/install-macos.sh            # or --dry-run to rehearse a week first
 ```
 
 Notes:
 - Keep this folder **outside** Documents, Desktop and Downloads: macOS blocks
   scheduled jobs from reading those folders unless you grant Full Disk Access.
-- The Mac must be awake and you must be logged in at 19:55, Sunday to Thursday. The job opens
+- The Mac must be awake and you must be logged in at 19:55 every day except Friday. The job opens
   a visible Chromium window; if Cloudflare shows "Verify you are human", tick it
   (the tool never does) and it carries on.
 - Notifications also go to your phone by iMessage if `.env` has
@@ -75,8 +78,8 @@ Notes:
 - If sign-in or booking fails, a screenshot and a description of the page (visible
   boxes and buttons only, never what was typed) are saved in `output/*/debug/`.
 - Log: `output/logs/release.log`; screenshots: `output/booking-<date>/`.
-- `launchctl kickstart gui/$(id -u)/local.clubspark-bookings.release` starts a REAL run
-  straight away (on Sunday-Thursday before 20:10 it waits for 20:00 and books).
+- `launchctl kickstart gui/$(id -u)/<label>` starts a REAL run straight away (before
+  20:10 on that job's day it waits for 20:00 and books).
 - Remove it: `scripts/install-macos.sh --uninstall`.
 
 ## Watch for a cancellation
