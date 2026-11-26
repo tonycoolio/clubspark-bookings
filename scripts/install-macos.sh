@@ -63,7 +63,7 @@ if [ "$(uname)" = "Darwin" ]; then
   echo "Scheduled: Sunday-Thursday 19:55, booking 20:00 Monday-Friday 8 days ahead (checks from 19:58, visible browser)"
   echo "Mode: $([ -n "$CONFIRM" ] && echo 'books for real' || echo 'dry run')."
   echo "Log: $REPO/output/logs/release.log"
-  echo "Test now: launchctl kickstart $DOMAIN/$LABEL"
+  echo "Run now (REAL booking if before 20:10 Sun-Thu): launchctl kickstart $DOMAIN/$LABEL"
 else
   echo "Wrote $PLIST (not macOS, so not loaded)."
 fi
