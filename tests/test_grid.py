@@ -40,3 +40,26 @@ def test_free_slot_selector_matches_only_free_slots():
 def test_cloudflare_check_detected():
     assert with_page(CLOUDFLARE, on_cloudflare_check) is True
     assert with_page(GRID, on_cloudflare_check) is False
+
+
+# Mimics the "Make a booking" pop-up recorded on 26 Nov 2026: a select2-hidden <select>.
+POPUP = """
+<p>Friday 4th December 2026, 20:00 to
+<select id="booking-duration" class="select2-hidden-accessible"
+        style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)"
+        onchange="const m=this.value-1200; document.getElementById('len').textContent=
+          'For '+(m>=60 ? Math.floor(m/60)+'hr '+(m%60) : m)+' minutes'">
+  <option value="1230">20:30</option><option value="1260">21:00</option><option value="1290">21:30</option>
+</select></p>
+<p id="len">For 30 minutes</p>
+<button id="submit-booking">Continue booking</button>
+"""
+
+
+def test_choose_length_sets_an_hour():
+    from clubspark_bookings.booker import choose_length
+    from clubspark_bookings.slots import Slot
+
+    slot = Slot("c1", date(2026, 12, 4), 1200)
+    assert with_page(POPUP, lambda page: choose_length(page, slot, 60)) == 60
+    assert with_page(POPUP, lambda page: choose_length(page, slot, 30)) == 30

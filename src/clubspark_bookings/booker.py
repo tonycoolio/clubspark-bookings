@@ -16,7 +16,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from . import selectors as S
 from .config import BASE_URL, Config, booking_url
 from .signin import dismiss_cookie_banner, ensure_signed_in, save_debug
-from .slots import Slot, matching
+from .slots import Slot, longest_first, parse_length, pick_end
 
 
 class BlockedError(RuntimeError):
@@ -64,9 +64,10 @@ def wait_out_cloudflare(page: Page, out: Path | None, headless: bool, seconds: f
         return False
 
 
-def find_free(page: Page, cfg: Config, day: date, start_minutes: int, *,
+def find_free(page: Page, cfg: Config, day: date, start_minutes: int, *, minutes: int = 60,
               out: Path | None = None, headless: bool = True) -> list[Slot]:
-    """Load (first time) or refresh the day's grid and return free slots at the target time."""
+    """Load (first time) or refresh the day's grid and return free slots at the target time,
+    courts free for the full `minutes` first."""
     target = booking_url(cfg.venue, day, role="member")
     if page.url != target:
         resp = page.goto(target, wait_until="domcontentloaded")
@@ -80,7 +81,7 @@ def find_free(page: Page, cfg: Config, day: date, start_minutes: int, *,
         if not wait_out_cloudflare(page, out, headless):
             return []  # grid not shown (date not released yet, or Cloudflare check)
     ids = [el.get_attribute(S.SLOT_ATTR) or "" for el in page.locator(S.FREE_SLOT).all()]
-    return matching(ids, day, start_minutes)
+    return longest_first(ids, day, start_minutes, minutes)
 
 
 def settle(page: Page, seconds: float = 10) -> None:
@@ -91,9 +92,29 @@ def settle(page: Page, seconds: float = 10) -> None:
         pass
 
 
-def book(page: Page, slot: Slot, out: Path, confirm: bool) -> bool:
+def choose_length(page: Page, slot: Slot, minutes: int) -> int:
+    """Set the pop-up's end time to give `minutes` (or the longest this court allows).
+    Returns the booking length the pop-up then shows."""
+    select = page.locator(S.DURATION_SELECT).first
+    select.wait_for(state="attached", timeout=10_000)
+    values = select.evaluate("s => [...s.options].map(o => o.value)")
+    end = pick_end([int(v) for v in values if v.isdigit()], slot.start_minutes, minutes)
+    if end is not None and select.input_value() != str(end):
+        select.select_option(str(end), force=True)  # the real <select> is hidden by select2
+    shown = page.locator(S.DURATION_TEXT).first
+    shown.wait_for(timeout=5_000)
+    got = parse_length(shown.inner_text())
+    if got is None or (end is not None and got != end - slot.start_minutes):
+        raise RuntimeError(f"pop-up shows {got} minutes after choosing {end - slot.start_minutes}")
+    return got
+
+
+def book(page: Page, slot: Slot, out: Path, confirm: bool, minutes: int = 60) -> bool:
     test_id = f"booking-{slot.court_id}|{slot.day.isoformat()}|{slot.start_minutes}"
     page.locator(f"[{S.SLOT_ATTR}='{test_id}']").first.click()
+    page.locator(S.CONTINUE_BOOKING).first.wait_for(timeout=15_000)
+    got = choose_length(page, slot, minutes)
+    log(f"Booking {got} minutes" + ("" if got >= minutes else f" (court not free for {minutes})") + ".")
     page.locator(S.CONTINUE_BOOKING).first.click()
     settle(page)
     button = page.locator(S.CONFIRM_BOOKING).first
@@ -128,7 +149,7 @@ def wait_until(moment: datetime, lead_seconds: float = 1.0) -> None:
 def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: float, until: datetime,
                    confirm: bool, headless: bool, out: Path, state: Path,
                    start_at: datetime | None = None, release_at: datetime | None = None,
-                   early_interval: float = 5.0) -> bool:
+                   early_interval: float = 5.0, minutes: int = 60) -> bool:
     """Sign in, optionally wait for `start_at`, then poll until a court is free at the
     target time and book it. Before `release_at` polls every `early_interval` seconds
     (gentler on ClubSpark's bot protection), from then on every `interval` seconds."""
@@ -145,7 +166,7 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
             page = ctx.new_page()
             ensure_signed_in(page, cfg, out / "debug", log, headless=headless)
             ctx.storage_state(path=str(state))
-            look = dict(out=out, headless=headless)
+            look = dict(minutes=minutes, out=out, headless=headless)
             if start_at:
                 find_free(page, cfg, day, start_minutes, **look)  # warm up before release
                 wait_until(start_at)
@@ -159,9 +180,10 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
                 for slot in slots:
                     log(f"Court {slot.court_id} free at {hhmm} on {day}. Booking...")
                     try:
-                        return book(page, slot, out, confirm)
-                    except PlaywrightError as exc:  # someone beat us to it; try the next court
-                        log(f"Could not book court {slot.court_id}: {exc.message.splitlines()[0]}")
+                        return book(page, slot, out, confirm, minutes)
+                    except (PlaywrightError, RuntimeError) as exc:  # e.g. someone beat us to it
+                        msg = getattr(exc, "message", str(exc)).splitlines()[0]
+                        log(f"Could not book court {slot.court_id}: {msg}")
                         save_debug(page, out / "debug", f"booking-failed-{attempts}")
                         find_free(page, cfg, day, start_minutes, **look)
                 if attempts == 1 or attempts % 30 == 0:

@@ -48,8 +48,8 @@ Shooters Hill releases each day's courts at 20:00 eight days ahead, so Friday
 courts open at 20:00 on the Thursday of the week before. `clubspark release`:
 
 1. signs in at 19:55 and loads the target Friday's page,
-2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books the
-   first free 20:00 court (moving on to the next court if someone else gets one
+2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books
+   20:00-21:00 on the first court free for the hour (or the longest it can get) (moving on to the next court if someone else gets one
    first). Faster refreshing trips Cloudflare's "Verify you are human" check.
 3. gives up after 10 minutes and shows a macOS notification with the result.
 
@@ -103,8 +103,10 @@ confirmation and result are saved next to `auth.json`.
 
 **First run:** the page selectors in `src/clubspark_bookings/selectors.py` are
 unverified against the live site. Do a `--headed` dry run first and adjust them
-if a step can't find its button. Booking uses the venue's default duration;
-check the confirmation screenshot shows the length and price you expect.
+if a step can't find its button.
+
+**Booking length:** 60 minutes by default (`--minutes 30` for half an hour). Courts free
+for the whole hour are tried first; if none is, it books the longest a court allows.
 
 Keep the interval at 60s or more so you don't load ClubSpark heavily or get rate-limited.
 

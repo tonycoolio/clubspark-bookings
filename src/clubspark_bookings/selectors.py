@@ -19,7 +19,15 @@ FREE_SLOT = "a.book-interval.not-booked[data-test-id^='booking-']"
 # Grid has finished rendering (any slot, booked or not).
 GRID_READY = ANY_SLOT
 
-# Booking pop-up after clicking a slot, and its continue button.
+# Booking pop-up after clicking a slot: "<date>, 08:30 to [09:00 v]" then "For 30 minutes".
+# CONFIRMED (26 Nov 2026): the "to" drop-down is a select2-wrapped <select id="booking-duration">
+# whose option values are end times in minutes after midnight, offered only up to the
+# court's next booking.
+DURATION_SELECT = "select#booking-duration"
+# Length label under it: "For 30 minutes", "For 1hr 0 minutes".
+DURATION_TEXT = "text=/For (\\d+\\s*hrs? )?\\d+ minutes/"
+
+# Booking pop-up's continue button.
 CONTINUE_BOOKING = "#submit-booking, button:has-text('Continue booking')"
 
 # Final confirmation page.

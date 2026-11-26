@@ -71,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--interval", type=int, default=60, help="seconds between checks (min 30)")
     bk.add_argument("--stop-before", type=int, default=60,
                     help="stop watching this many minutes before the slot (default 60)")
+    bk.add_argument("--minutes", type=int, default=60,
+                    help="booking length in minutes (default 60; shorter if that's all a court has)")
     bk.add_argument("--confirm", action="store_true", help="actually complete the booking")
     bk.add_argument("--headed", action="store_true", help="show the browser window")
     bk.add_argument("--out", type=Path, default=Path("output"))
@@ -90,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     rel.add_argument("--window", type=int, default=10, help="minutes to keep trying after release")
     rel.add_argument("--now", action="store_true",
                      help="don't wait for the release time (for testing a dry run)")
+    rel.add_argument("--minutes", type=int, default=60,
+                    help="booking length in minutes (default 60; shorter if that's all a court has)")
     rel.add_argument("--confirm", action="store_true", help="actually complete the booking")
     rel.add_argument("--headed", action="store_true")
     rel.add_argument("--out", type=Path, default=Path("output"))
@@ -115,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
                                 until=until, confirm=args.confirm, headless=not args.headed,
                                 out=args.out / f"booking-{day.isoformat()}",
-                                state=args.out / "auth.json")
+                                state=args.out / "auth.json", minutes=args.minutes)
             return 0 if ok else 1
         elif args.command == "login":
             return login_by_hand(cfg, Path("output"))
@@ -140,7 +144,8 @@ def main(argv: list[str] | None = None) -> int:
                                     out=args.out / f"booking-{day.isoformat()}",
                                     state=args.out / "auth.json", start_at=start,
                                     release_at=release,
-                                    early_interval=max(3.0, args.early_poll))
+                                    early_interval=max(3.0, args.early_poll),
+                                    minutes=args.minutes)
             except Exception as exc:
                 notify("Court booking failed", f"{label}: {exc}"[:200])
                 raise
