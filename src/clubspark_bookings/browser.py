@@ -5,13 +5,10 @@ import json
 from datetime import date
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import sync_playwright
 
+from .booker import BlockedError
 from .config import BASE_URL, Config, booking_url
-
-
-class BlockedError(RuntimeError):
-    """ClubSpark's Cloudflare firewall refused the request (common from cloud IPs)."""
 
 
 def capture_availability(cfg: Config, day: date, out_dir: Path, headless: bool = True) -> Path:
@@ -53,10 +50,3 @@ def capture_availability(cfg: Config, day: date, out_dir: Path, headless: bool =
     (day_dir / "responses.json").write_text(json.dumps(responses, indent=2))
     return day_dir
 
-
-def login(page: Page, cfg: Config) -> None:
-    """Sign in to ClubSpark. Not implemented yet: the sign-in form's selectors
-    have to be confirmed against the live site first."""
-    if not cfg.has_credentials:
-        raise RuntimeError("Set CLUBSPARK_USERNAME and CLUBSPARK_PASSWORD to sign in.")
-    raise NotImplementedError("Login selectors not yet confirmed against the live site.")
