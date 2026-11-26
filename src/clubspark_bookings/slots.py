@@ -69,6 +69,14 @@ def parse_length(label: str) -> int | None:
     return int(m.group(1) or 0) * 60 + int(m.group(2)) if m else None
 
 
+def describe_booking(text: str) -> str | None:
+    """'Court 5, 20:00-21:00' from the confirmation page's text ("Court 5 ... 20:00 - 21:00")."""
+    court = re.search(r"\bCourt\s+\d+\b", text)
+    times = re.search(r"\b(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\b", text)
+    parts = [court.group(0) if court else None, f"{times.group(1)}-{times.group(2)}" if times else None]
+    return ", ".join(p for p in parts if p) or None
+
+
 def next_weekday(weekday: int, after: datetime, at: time) -> date:
     """Next date with the given weekday (Mon=0) whose `at` time hasn't passed yet."""
     days = (weekday - after.weekday()) % 7

@@ -63,3 +63,15 @@ def test_parse_length():
     assert parse_length("For 1hr 0 minutes") == 60
     assert parse_length("For 1hr 30 minutes") == 90
     assert parse_length("Free") is None
+
+
+def test_describe_booking():
+    from clubspark_bookings.slots import describe_booking
+
+    # Text of the real "Your booking has been confirmed" page, 26 Nov 2026.
+    booked = ("Your booking has been confirmed\nWe've emailed the confirmation.\nBooking details\n"
+              "Court 5\n04 Dec 2026, 20:00 - 20:30\nAdd booking to your calendar")
+    assert describe_booking(booked) == "Court 5, 20:00-20:30"
+    confirm = "Resource details\nCourt 4\n28 November 2026, 16:00 - 17:00 · 60 mins"
+    assert describe_booking(confirm) == "Court 4, 16:00-17:00"
+    assert describe_booking("nothing here") is None

@@ -16,7 +16,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from . import selectors as S
 from .config import BASE_URL, Config, booking_url
 from .signin import dismiss_cookie_banner, ensure_signed_in, save_debug
-from .slots import Slot, longest_first, parse_length, pick_end
+from .slots import Slot, describe_booking, longest_first, parse_length, pick_end
 
 
 class BlockedError(RuntimeError):
@@ -109,7 +109,15 @@ def choose_length(page: Page, slot: Slot, minutes: int) -> int:
     return got
 
 
-def book(page: Page, slot: Slot, out: Path, confirm: bool, minutes: int = 60) -> bool:
+def page_text(page: Page) -> str:
+    try:
+        return page.inner_text("body")
+    except PlaywrightError:
+        return ""
+
+
+def book(page: Page, slot: Slot, out: Path, confirm: bool, minutes: int = 60) -> str | None:
+    """Book `slot`. Returns what was booked (e.g. 'Court 5, 20:00-21:00'), or None on a dry run."""
     test_id = f"booking-{slot.court_id}|{slot.day.isoformat()}|{slot.start_minutes}"
     page.locator(f"[{S.SLOT_ATTR}='{test_id}']").first.click()
     page.locator(S.CONTINUE_BOOKING).first.wait_for(timeout=15_000)
@@ -120,15 +128,17 @@ def book(page: Page, slot: Slot, out: Path, confirm: bool, minutes: int = 60) ->
     button = page.locator(S.CONFIRM_BOOKING).first
     button.wait_for(timeout=30_000)
     page.screenshot(path=str(out / "confirmation.png"), full_page=True)
+    summary = describe_booking(page_text(page))
     if not confirm:
-        log(f"DRY RUN: stopped at the confirmation page ({out / 'confirmation.png'}). "
-            "Re-run with --confirm to book for real.")
-        return False
+        log(f"DRY RUN: stopped at the confirmation page for {summary or 'the booking'} "
+            f"({out / 'confirmation.png'}). Re-run with --confirm to book for real.")
+        return None
     button.click()
     settle(page, 20)
     page.screenshot(path=str(out / "booked.png"), full_page=True)
-    log(f"Clicked confirm. Check {out / 'booked.png'} and your email for the booking.")
-    return True
+    summary = describe_booking(page_text(page)) or summary or "a court"
+    log(f"Clicked confirm: {summary}. Check {out / 'booked.png'} and your email for the booking.")
+    return summary
 
 
 def notify(title: str, message: str) -> None:
@@ -150,7 +160,7 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
                    confirm: bool, headless: bool, out: Path, state: Path,
                    start_at: datetime | None = None, release_at: datetime | None = None,
                    early_interval: float = 5.0, minutes: int = 60,
-                   court: str | None = None) -> bool:
+                   court: str | None = None) -> str | None:
     """Sign in, optionally wait for `start_at`, then poll until a court is free at the
     target time and book it. Before `release_at` polls every `early_interval` seconds
     (gentler on ClubSpark's bot protection), from then on every `interval` seconds.
@@ -208,6 +218,6 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
                 pause = early_interval if release_at and datetime.now() < release_at else interval
                 _time.sleep(pause + random.uniform(0, pause * 0.2))
             log("Gave up: deadline reached with no free court.")
-            return False
+            return None
         finally:
             browser.close()

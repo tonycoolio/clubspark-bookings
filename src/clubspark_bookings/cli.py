@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"{'' if args.confirm else ' (dry run)'}")
             label = f"{day:%a %d %b} {args.time}" + (f" (court {args.court})" if args.court else "")
             try:
-                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
+                booked = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
                                     until=until, confirm=args.confirm, headless=not args.headed,
                                     out=args.out / f"booking-{day.isoformat()}",
                                     state=args.out / "auth.json", minutes=args.minutes,
@@ -128,11 +128,11 @@ def main(argv: list[str] | None = None) -> int:
             except Exception as exc:
                 notify("Court watcher stopped", f"{label}: {exc}"[:200])
                 raise
-            if ok:
-                notify("Court booked", f"{label} at Shooters Hill. Check your email.")
+            if booked:
+                notify("Court booked", f"{booked} on {day:%a %d %b}, Shooters Hill. Check your email.")
             elif args.confirm:
                 notify("Court watcher finished", f"{label}: no cancellation before {until:%a %H:%M}.")
-            return 0 if ok else 1
+            return 0 if booked else 1
         elif args.command == "login":
             return login_by_hand(cfg, Path("output"))
         elif args.command == "release":
@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"checking from {start:%H:%M:%S}."
                   f"{'' if args.confirm else ' (dry run)'}")
             try:
-                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(3.0, args.poll),
+                booked = watch_and_book(cfg, day, to_minutes(args.time), interval=max(3.0, args.poll),
                                     until=until, confirm=args.confirm, headless=not args.headed,
                                     out=args.out / f"booking-{day.isoformat()}",
                                     state=args.out / "auth.json", start_at=start,
@@ -161,13 +161,13 @@ def main(argv: list[str] | None = None) -> int:
             except Exception as exc:
                 notify("Court booking failed", f"{label}: {exc}"[:200])
                 raise
-            if ok:
-                notify("Court booked", f"{label} at Shooters Hill. Check your email.")
+            if booked:
+                notify("Court booked", f"{booked} on {day:%a %d %b}, Shooters Hill. Check your email.")
             elif args.confirm:
                 notify("No court booked", f"{label}: none free within {args.window} min.")
             else:
                 notify("Dry run finished", f"{label}: see output/booking-{day.isoformat()}")
-            return 0 if ok else 1
+            return 0 if booked else 1
     except BlockedError as exc:
         print(exc, file=sys.stderr)
         return 2
