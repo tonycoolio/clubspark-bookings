@@ -67,6 +67,11 @@ Notes:
 - The Mac must be awake and you must be logged in at 19:55, Sunday to Thursday. The job opens
   a visible Chromium window; if Cloudflare shows "Verify you are human", tick it
   (the tool never does) and it carries on.
+- Notifications also go to your phone by iMessage if `.env` has
+  `CLUBSPARK_IMESSAGE_TO=<your phone number or Apple ID email>` (Messages must be signed
+  in on the Mac). Check with `.venv/bin/clubspark notify-test`. The first text from the
+  scheduled job needs System Settings › Privacy & Security › Automation to allow it to
+  control Messages; a failed text is logged and never stops a booking.
 - If sign-in or booking fails, a screenshot and a description of the page (visible
   boxes and buttons only, never what was typed) are saved in `output/*/debug/`.
 - Log: `output/logs/release.log`; screenshots: `output/booking-<date>/`.
