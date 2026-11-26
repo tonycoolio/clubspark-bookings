@@ -101,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
     rel.add_argument("--out", type=Path, default=Path("output"))
 
     sub.add_parser("login", help="Sign in by hand once; the session is saved for later runs")
+    sub.add_parser("notify-test", help="Send a test notification (and iMessage, if set up)")
 
     args = parser.parse_args(argv)
     load_dotenv()
@@ -133,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
             elif args.confirm:
                 notify("Court watcher finished", f"{label}: no cancellation before {until:%a %H:%M}.")
             return 0 if booked else 1
+        elif args.command == "notify-test":
+            notify("ClubSpark test", "Notifications are working.")
         elif args.command == "login":
             return login_by_hand(cfg, Path("output"))
         elif args.command == "release":

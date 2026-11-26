@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import subprocess
 import sys
@@ -141,11 +142,33 @@ def book(page: Page, slot: Slot, out: Path, confirm: bool, minutes: int = 60) ->
     return summary
 
 
+_IMESSAGE = [
+    "on run argv",
+    "tell application \"Messages\"",
+    "set svc to 1st account whose service type = iMessage",
+    "send (item 2 of argv) to participant (item 1 of argv) of svc",
+    "end tell",
+    "end run",
+]
+
+
 def notify(title: str, message: str) -> None:
-    """Show a desktop notification on macOS (no-op elsewhere)."""
-    if sys.platform == "darwin":
-        script = f'display notification {json.dumps(message)} with title {json.dumps(title)}'
-        subprocess.run(["osascript", "-e", script], check=False)
+    """Show a desktop notification on macOS (no-op elsewhere), and text it with iMessage
+    when CLUBSPARK_IMESSAGE_TO (a phone number or Apple ID email) is set."""
+    if sys.platform != "darwin":
+        return
+    script = f'display notification {json.dumps(message)} with title {json.dumps(title)}'
+    subprocess.run(["osascript", "-e", script], check=False)
+    to = os.environ.get("CLUBSPARK_IMESSAGE_TO", "").strip()
+    if to:
+        args = [a for line in _IMESSAGE for a in ("-e", line)]
+        try:
+            res = subprocess.run(["osascript", *args, to, f"{title}: {message}"],
+                                 capture_output=True, text=True, timeout=60, check=False)
+            if res.returncode:
+                log(f"Could not send the iMessage: {res.stderr.strip()[:200]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:  # never let a text break a booking
+            log(f"Could not send the iMessage: {exc}")
 
 
 def wait_until(moment: datetime, lead_seconds: float = 1.0) -> None:
