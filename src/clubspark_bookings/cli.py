@@ -118,11 +118,20 @@ def main(argv: list[str] | None = None) -> int:
             until = datetime.combine(day, start) - timedelta(minutes=args.stop_before)
             print(f"Target: {day:%A %d %b %Y} at {args.time}; watching until {until:%a %H:%M}."
                   f"{'' if args.confirm else ' (dry run)'}")
-            ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
-                                until=until, confirm=args.confirm, headless=not args.headed,
-                                out=args.out / f"booking-{day.isoformat()}",
-                                state=args.out / "auth.json", minutes=args.minutes,
-                                court=args.court)
+            label = f"{day:%a %d %b} {args.time}" + (f" (court {args.court})" if args.court else "")
+            try:
+                ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
+                                    until=until, confirm=args.confirm, headless=not args.headed,
+                                    out=args.out / f"booking-{day.isoformat()}",
+                                    state=args.out / "auth.json", minutes=args.minutes,
+                                    court=args.court)
+            except Exception as exc:
+                notify("Court watcher stopped", f"{label}: {exc}"[:200])
+                raise
+            if ok:
+                notify("Court booked", f"{label} at Shooters Hill. Check your email.")
+            elif args.confirm:
+                notify("Court watcher finished", f"{label}: no cancellation before {until:%a %H:%M}.")
             return 0 if ok else 1
         elif args.command == "login":
             return login_by_hand(cfg, Path("output"))
