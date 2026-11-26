@@ -49,8 +49,9 @@ courts open at 20:00 on the Thursday of the week before. `clubspark release`:
 
 1. signs in at 19:55 and loads the target Friday's page,
 2. from 19:58 refreshes every ~15s, and from 20:00:00 every ~5s, and books
-   20:00-21:00 on the first court free for the hour (or the longest it can get) (moving on to the next court if someone else gets one
-   first). Faster refreshing trips Cloudflare's "Verify you are human" check.
+   20:00-21:00 on the first court free for the hour, or the longest it can get
+   (moving on to the next court if someone else gets one first). Faster
+   refreshing trips Cloudflare's "Verify you are human" check.
 3. gives up after 10 minutes and shows a macOS notification with the result.
 
 Set it up on the Mac that stays on (run these from this folder):
