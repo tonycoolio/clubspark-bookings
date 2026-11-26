@@ -71,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--interval", type=int, default=60, help="seconds between checks (min 30)")
     bk.add_argument("--stop-before", type=int, default=60,
                     help="stop watching this many minutes before the slot (default 60)")
+    bk.add_argument("--court", help="only this court: its id or the start of it, as in the "
+                                    "page's data-test-id (Court 5 = 165f0ac2)")
     bk.add_argument("--minutes", type=int, default=60,
                     help="booking length in minutes (default 60; shorter if that's all a court has)")
     bk.add_argument("--confirm", action="store_true", help="actually complete the booking")
@@ -119,7 +121,8 @@ def main(argv: list[str] | None = None) -> int:
             ok = watch_and_book(cfg, day, to_minutes(args.time), interval=max(30, args.interval),
                                 until=until, confirm=args.confirm, headless=not args.headed,
                                 out=args.out / f"booking-{day.isoformat()}",
-                                state=args.out / "auth.json", minutes=args.minutes)
+                                state=args.out / "auth.json", minutes=args.minutes,
+                                court=args.court)
             return 0 if ok else 1
         elif args.command == "login":
             return login_by_hand(cfg, Path("output"))

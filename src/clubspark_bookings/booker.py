@@ -149,13 +149,17 @@ def wait_until(moment: datetime, lead_seconds: float = 1.0) -> None:
 def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: float, until: datetime,
                    confirm: bool, headless: bool, out: Path, state: Path,
                    start_at: datetime | None = None, release_at: datetime | None = None,
-                   early_interval: float = 5.0, minutes: int = 60) -> bool:
+                   early_interval: float = 5.0, minutes: int = 60,
+                   court: str | None = None) -> bool:
     """Sign in, optionally wait for `start_at`, then poll until a court is free at the
     target time and book it. Before `release_at` polls every `early_interval` seconds
-    (gentler on ClubSpark's bot protection), from then on every `interval` seconds."""
+    (gentler on ClubSpark's bot protection), from then on every `interval` seconds.
+    `court` limits it to one court (its id, or the start of it). Long watches sign in
+    again every few hours and ride out network errors."""
     out.mkdir(parents=True, exist_ok=True)
     state.parent.mkdir(parents=True, exist_ok=True)
     hhmm = f"{start_minutes // 60:02d}:{start_minutes % 60:02d}"
+    where = f"court {court}" if court else "court"
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         try:
@@ -166,6 +170,7 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
             page = ctx.new_page()
             ensure_signed_in(page, cfg, out / "debug", log, headless=headless)
             ctx.storage_state(path=str(state))
+            signed_in_at = datetime.now()
             look = dict(minutes=minutes, out=out, headless=headless)
             if start_at:
                 find_free(page, cfg, day, start_minutes, **look)  # warm up before release
@@ -174,7 +179,19 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
             attempts = 0
             while datetime.now() < until:
                 attempts += 1
-                slots = find_free(page, cfg, day, start_minutes, **look)
+                try:
+                    if (datetime.now() - signed_in_at).total_seconds() > 4 * 3600:
+                        ensure_signed_in(page, cfg, out / "debug", log, headless=headless)
+                        ctx.storage_state(path=str(state))
+                        signed_in_at = datetime.now()
+                    slots = find_free(page, cfg, day, start_minutes, **look)
+                except (PlaywrightError, RuntimeError) as exc:
+                    if not court:  # release runs: don't hide a broken page
+                        raise
+                    log(f"Check failed, will retry: {getattr(exc, 'message', str(exc)).splitlines()[0]}")
+                    slots = []
+                if court:
+                    slots = [s for s in slots if s.court_id.startswith(court)]
                 if attempts == 1:
                     save_debug(page, out / "debug", "booking-page")
                 for slot in slots:
@@ -187,7 +204,7 @@ def watch_and_book(cfg: Config, day: date, start_minutes: int, *, interval: floa
                         save_debug(page, out / "debug", f"booking-failed-{attempts}")
                         find_free(page, cfg, day, start_minutes, **look)
                 if attempts == 1 or attempts % 30 == 0:
-                    log(f"No court free at {hhmm} on {day} (check {attempts}).")
+                    log(f"No {where} free at {hhmm} on {day} (check {attempts}).")
                 pause = early_interval if release_at and datetime.now() < release_at else interval
                 _time.sleep(pause + random.uniform(0, pause * 0.2))
             log("Gave up: deadline reached with no free court.")
